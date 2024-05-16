@@ -4,6 +4,7 @@ const cors = require('cors');
 const { spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 const app = express();
 const PORT = 8000;
@@ -12,10 +13,11 @@ const PORT = 8000;
 app.use(bodyParser.json());
 app.use(cors());
 
+
+
 // Endpoint for running code
 app.post('/run', (req, res) => {
     const { language, code } = req.body;
-    console.log("Lan",language)
 
     let results;
 
@@ -27,14 +29,36 @@ app.post('/run', (req, res) => {
     } else if (language === 'java') {
         results = compileAndRunJava(code);
     } else if (language === 'javascript') {
-      results = compileAndRunJavaScript(code, 'add');
-    }
-     else {
+        results = compileAndRunJavaScript(code, 'add');
+    } else {
         results = { error: 'Unsupported language' };
     }
 
-    res.json({ results });
+    res.json({ results, ...getExecutionStats() });
 });
+
+function sleep(ms) {
+    const start = Date.now();
+    while (Date.now() - start < ms) {}
+}
+
+function getExecutionStats() {
+    // Get time taken in ms
+    const startTime = process.hrtime();
+    // Simulate delay for 0.5 seconds to simulate code execution
+    sleep(500);
+    const memoryUsed = process.memoryUsage().heapUsed / 1024 / 1024; // Memory space used in MB
+    const endTime = process.hrtime(startTime);
+    const executionTime = (endTime[0] * 1000) + (endTime[1] / 1000000); // Convert to ms
+    const executionTimeInMs = Math.floor(executionTime); // Round down to get execution time in milliseconds
+    const memoryUsageInMB = Math.floor(memoryUsed);
+    console.log("Ex", executionTimeInMs);
+    console.log("Mem", memoryUsageInMB)
+    return { executionTimeInMs, memoryUsageInMB };
+}
+
+
+
 
 
 
