@@ -55,6 +55,9 @@ function App() {
   ];
 
   const runCode = async () => {
+    // Start the timer when code execution begins
+    setTimerEnabled(true);
+
     try {
       const response = await axios.post('http://localhost:8000/run', { language, code });
       setResults(response.data.results);
@@ -62,7 +65,10 @@ function App() {
       setMemoryUsed(response.data.memoryUsageInMB);
     } catch (error) {
       console.error('Error:', error);
-    } 
+    } finally {
+      // Reset the timer when code execution completes
+      setTimerEnabled(false);
+    }
   };
 
   return (
@@ -88,7 +94,11 @@ function App() {
         />
       </div>
       <button onClick={runCode}>Run Code</button>
-     
+      <div>
+        <h2>Timer:</h2>
+        <p>{formatTime(remainingTime)}</p>
+        {!timerEnabled && remainingTime === 10 * 60 && <button onClick={() => setTimerEnabled(true)}>Start Timer</button>}
+      </div>
       <div>
         <h2>Test Case Results:</h2>
         <ul>
