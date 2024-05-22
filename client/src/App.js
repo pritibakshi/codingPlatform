@@ -11,6 +11,8 @@ function App() {
   const [timerEnabled, setTimerEnabled] = useState(false);
   const [remainingTime, setRemainingTime] = useState(10 * 60); // Initial remaining time in seconds
   const [timerId, setTimerId] = useState(null);
+  const [customTestCases, setCustomTestCases] = useState([]);
+  const [error, setError] = useState(null); // To store any errors
 
   useEffect(() => {
     if (timerEnabled && remainingTime > 0) {
@@ -48,23 +50,30 @@ function App() {
     return `${minutes}:${seconds < 10 ? `0${seconds}` : seconds}`;
   };
 
-  const testCases = [
-    { input: "1 2", output: "3" },
-    { input: "5 10", output: "15" },
-    { input: "0 0", output: "0" }
-  ];
+  const handleAddTestCase = () => {
+    setCustomTestCases([...customTestCases, { input: '', output: '' }]);
+  };
+
+  const handleTestCaseChange = (index, field, value) => {
+    const updatedTestCases = customTestCases.map((testCase, i) =>
+      i === index ? { ...testCase, [field]: value } : testCase
+    );
+    setCustomTestCases(updatedTestCases);
+  };
 
   const runCode = async () => {
     // Start the timer when code execution begins
     setTimerEnabled(true);
+    setError(null); // Reset any previous error
 
     try {
-      const response = await axios.post('http://localhost:8000/run', { language, code });
+      const response = await axios.post('http://localhost:8000/run', { language, code, customTestCases });
       setResults(response.data.results);
       setExecutionTime(response.data.executionTimeInMs);
       setMemoryUsed(response.data.memoryUsageInMB);
     } catch (error) {
       console.error('Error:', error);
+      setError('An error occurred while running the code. Please try again.');
     } finally {
       // Reset the timer when code execution completes
       setTimerEnabled(false);
@@ -109,23 +118,32 @@ function App() {
           ))}
         </ul>
       </div>
-
       <div>
         <h2>Execution Stats:</h2>
         <p>Execution Time: {executionTimeInMs} ms</p>
         <p>Memory Used: {memoryUsageInMB} MB</p>
       </div>
-
       <div>
-        <h2>Test Cases:</h2>
-        <ul>
-          {testCases.map((testCase, index) => (
-            <li key={index}>
-              Test Case {index + 1}: Input: {testCase.input}, Output: {testCase.output}
-            </li>
-          ))}
-        </ul>
+        <h2>Custom Test Cases:</h2>
+        {customTestCases.map((testCase, index) => (
+          <div key={index}>
+            <input
+              type="text"
+              placeholder={`Input ${index + 1}`}
+              value={testCase.input}
+              onChange={(e) => handleTestCaseChange(index, 'input', e.target.value)}
+            />
+            <input
+              type="text"
+              placeholder={`Expected Output ${index + 1}`}
+              value={testCase.output}
+              onChange={(e) => handleTestCaseChange(index, 'output', e.target.value)}
+            />
+          </div>
+        ))}
+        <button onClick={handleAddTestCase}>Add Test Case</button>
       </div>
+      {error && <p style={{color: 'red'}}>{error}</p>} {/* Display any error */}
     </div>
   );
 }
