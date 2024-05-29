@@ -8,17 +8,16 @@ const path = require('path');
 const app = express();
 const PORT = 8000;
 
-//Handling POST requests to the '/run' endpoint
+// Handling POST requests to the '/run' endpoint
 app.use(bodyParser.json());
 app.use(cors());
 
-app.post('/run', (req, res) => {
+app.post('/run', async (req, res) => {
     const { language, code, customTestCases } = req.body;
 
     let results;
     const startMemory = process.memoryUsage().heapUsed;
     const startTime = process.hrtime();
-
 
     // Conditional statements to determine the language and execute appropriate functions
     if (language === 'cpp') {
@@ -33,31 +32,24 @@ app.post('/run', (req, res) => {
         results = { error: 'Unsupported language' };
     }
 
-// Calculating execution time and memory usage
-const endTime = process.hrtime(startTime);
-const endMemory = process.memoryUsage().heapUsed;
-const executionTimeInMs = endTime[0] * 1000 + endTime[1] / 1000000;
-const memoryUsageInMB = (endMemory - startMemory) / 1024 / 1024;
+    // Calculating execution time and memory usage
+    const endTime = process.hrtime(startTime);
+    const endMemory = process.memoryUsage().heapUsed;
+    const executionTimeInMs = endTime[0] * 1000 + endTime[1] / 1000000;
+    const memoryUsageInMB = (endMemory - startMemory) / 1024 / 1024;
 
-// Sending the results, execution time, and memory usage as JSON response
-res.json({
-  results,
-  executionTimeInMs: Math.round(executionTimeInMs),
-  memoryUsageInMB: memoryUsageInMB.toFixed(2),
-   });
+    // Sending the results, execution time, and memory usage as JSON response
+    res.json({
+        results,
+        executionTimeInMs: Math.round(executionTimeInMs),
+        memoryUsageInMB: memoryUsageInMB.toFixed(2),
+    });
 });
 
 function compileAndRunCPP(code, customTestCases) {
-    const defaultTestCases = [
-        { input: "1 2", output: "3" },
-        { input: "5 10", output: "15" },
-        { input: "0 0", output: "0" }
-    ];
-    const testCases = defaultTestCases.concat(customTestCases);
-
     const results = [];
-    for (let i = 0; i < testCases.length; i++) {
-        const { input, output } = testCases[i];
+    for (let i = 0; i < customTestCases.length; i++) {
+        const { input, output } = customTestCases[i];
         const testCaseResult = runTestCase(code, input, output, 'cpp');
         results.push(testCaseResult);
     }
@@ -65,19 +57,12 @@ function compileAndRunCPP(code, customTestCases) {
 }
 
 function compileAndRunPython(code, customTestCases) {
-    const defaultTestCases = [
-        { input: ["1", "2"], output: "3" },
-        { input: ["5", "10"], output: "15" },
-        { input: ["0", "0"], output: "0" }
-    ];
-    const testCases = defaultTestCases.concat(customTestCases);
-
     const results = [];
     const tempPythonFile = path.join(__dirname, 'temp.py');
     fs.writeFileSync(tempPythonFile, code);
 
-    for (let i = 0; i < testCases.length; i++) {
-        const { input, output } = testCases[i];
+    for (let i = 0; i < customTestCases.length; i++) {
+        const { input, output } = customTestCases[i];
         // Ensure input is always an array
         const inputArray = Array.isArray(input) ? input : input.split(" ");
         const testCaseResult = runTestCase(tempPythonFile, inputArray, output, 'python');
@@ -100,16 +85,9 @@ function compileAndRunJava(code, customTestCases) {
         return [false, false, false];
     }
 
-    const defaultTestCases = [
-        { input: "1 2", output: "3" },
-        { input: "5 10", output: "15" },
-        { input: "0 0", output: "0" }
-    ];
-    const testCases = defaultTestCases.concat(customTestCases);
-
     const results = [];
-    for (let i = 0; i < testCases.length; i++) {
-        const { input, output } = testCases[i];
+    for (let i = 0; i < customTestCases.length; i++) {
+        const { input, output } = customTestCases[i];
         const execution = spawnSync('java', ['-classpath', javaDir, 'Main'], { input });
         if (execution.status === 0) {
             const actualOutput = execution.stdout.toString().trim();
@@ -130,16 +108,9 @@ function compileAndRunJavaScript(code, customTestCases) {
     const jsFile = path.join(jsDir, 'script.js');
     fs.writeFileSync(jsFile, code);
 
-    const defaultTestCases = [
-        { input: "1\n2\n", output: "3" },
-        { input: "5\n10\n", output: "15" },
-        { input: "0\n0\n", output: "0" }
-    ];
-    const testCases = defaultTestCases.concat(customTestCases);
-
     const results = [];
-    for (let i = 0; i < testCases.length; i++) {
-        const { input, output } = testCases[i];
+    for (let i = 0; i < customTestCases.length; i++) {
+        const { input, output } = customTestCases[i];
         const execution = spawnSync('node', [jsFile], { input });
         const actualOutput = execution.stdout.toString().trim();
         results.push(actualOutput === output);
@@ -147,7 +118,6 @@ function compileAndRunJavaScript(code, customTestCases) {
 
     return results;
 }
-
 
 // Function to execute test cases and compare output
 function runTestCase(code, input, expectedOutput, language) {
@@ -178,9 +148,7 @@ function runTestCase(code, input, expectedOutput, language) {
     }
 }
 
-
 // Starting the server and listening on the specified port
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
-
