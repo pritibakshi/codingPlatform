@@ -8,71 +8,82 @@ const path = require('path');
 const app = express();
 const PORT = 8000;
 
-// Handling POST requests to the '/run' endpoint
 app.use(bodyParser.json());
 app.use(cors());
 
+// Endpoint to handle the execution of code
 app.post('/run', async (req, res) => {
     const { language, code, customTestCases } = req.body;
 
-    let results;
-    const startMemory = process.memoryUsage().heapUsed;
-    const startTime = process.hrtime();
+    let compileExitCode, compileTime, compileMessage = [];
+    const startCompileTime = process.hrtime();
 
-    // Conditional statements to determine the language and execute appropriate functions
+// Compile the code based on the specified language
+    let compileResult;
     if (language === 'cpp') {
-        results = compileAndRunCPP(code, customTestCases);
+        compileResult = compileCPP(code);
     } else if (language === 'python') {
-        results = compileAndRunPython(code, customTestCases);
+        compileResult = compilePython(code);
     } else if (language === 'java') {
-        results = compileAndRunJava(code, customTestCases);
+        compileResult = compileJava(code);
     } else if (language === 'javascript') {
-        results = compileAndRunJavaScript(code, customTestCases);
+        compileResult = compileJavaScript(code);
     } else {
-        results = { error: 'Unsupported language' };
+        return res.json({ error: 'Unsupported language' });
     }
 
-    // Calculating execution time and memory usage
-    const endTime = process.hrtime(startTime);
+    compileExitCode = compileResult.exitCode;
+    compileTime = process.hrtime(startCompileTime)[1] / 1000000; // Convert to milliseconds
+    compileMessage = compileResult.message;
+
+    const results = [];
+    const startMemory = process.memoryUsage().heapUsed;
+
+    // Run each custom test case
+    for (let i = 0; i < customTestCases.length; i++) {
+        const { input, output } = customTestCases[i];
+        const result = runTestCase(compileResult.filePath, input, output, language);
+        results.push(result);
+    }
+
     const endMemory = process.memoryUsage().heapUsed;
-    const executionTimeInMs = endTime[0] * 1000 + endTime[1] / 1000000;
     const memoryUsageInMB = (endMemory - startMemory) / 1024 / 1024;
 
-    // Sending the results, execution time, and memory usage as JSON response
+    // Send the results back to the client
     res.json({
+        compileExitCode,
+        compileTime: Math.round(compileTime),
+        compileMessage,
         results,
-        executionTimeInMs: Math.round(executionTimeInMs),
         memoryUsageInMB: memoryUsageInMB.toFixed(2),
     });
 });
 
-function compileAndRunCPP(code, customTestCases) {
-    const results = [];
-    for (let i = 0; i < customTestCases.length; i++) {
-        const { input, output } = customTestCases[i];
-        const testCaseResult = runTestCase(code, input, output, 'cpp');
-        results.push(testCaseResult);
-    }
-    return results;
+// Function to compile C++ code
+function compileCPP(code) {
+    const tempFile = 'temp.cpp';
+    fs.writeFileSync(tempFile, code);
+    const compile = spawnSync('g++', [tempFile, '-o', 'temp.out']);
+    return {
+        exitCode: compile.status,
+        message: compile.status === 0 ? ['Compiled Successfully'] : [compile.stderr.toString()],
+        filePath: './temp.out',
+    };
 }
 
-function compileAndRunPython(code, customTestCases) {
-    const results = [];
-    const tempPythonFile = path.join(__dirname, 'temp.py');
-    fs.writeFileSync(tempPythonFile, code);
-
-    for (let i = 0; i < customTestCases.length; i++) {
-        const { input, output } = customTestCases[i];
-        // Ensure input is always an array
-        const inputArray = Array.isArray(input) ? input : input.split(" ");
-        const testCaseResult = runTestCase(tempPythonFile, inputArray, output, 'python');
-        results.push(testCaseResult);
-    }
-
-    return results;
+// Function to compile Python code
+function compilePython(code) {
+    const tempFile = 'temp.py';
+    fs.writeFileSync(tempFile, code);
+    return {
+        exitCode: 0,
+        message: ['Compiled Successfully'],
+        filePath: tempFile,
+    };
 }
 
-function compileAndRunJava(code, customTestCases) {
+// Function to compile Java code
+function compileJava(code) {
     const javaDir = path.join(__dirname, 'java');
     if (!fs.existsSync(javaDir)) {
         fs.mkdirSync(javaDir);
@@ -80,75 +91,72 @@ function compileAndRunJava(code, customTestCases) {
     const javaFile = path.join(javaDir, 'Main.java');
     fs.writeFileSync(javaFile, code);
 
-    const compilation = spawnSync('javac', [javaFile]);
-    if (compilation.status !== 0) {
-        return [false, false, false];
-    }
-
-    const results = [];
-    for (let i = 0; i < customTestCases.length; i++) {
-        const { input, output } = customTestCases[i];
-        const execution = spawnSync('java', ['-classpath', javaDir, 'Main'], { input });
-        if (execution.status === 0) {
-            const actualOutput = execution.stdout.toString().trim();
-            results.push(actualOutput === output);
-        } else {
-            results.push(false);
-        }
-    }
-
-    return results;
+    const compile = spawnSync('javac', [javaFile]);
+    return {
+        exitCode: compile.status,
+        message: compile.status === 0 ? ['Compiled Successfully'] : [compile.stderr.toString()],
+        filePath: path.join(javaDir, 'Main'),
+    };
 }
 
-function compileAndRunJavaScript(code, customTestCases) {
-    const jsDir = path.join(__dirname, 'javascript');
-    if (!fs.existsSync(jsDir)) {
-        fs.mkdirSync(jsDir);
-    }
-    const jsFile = path.join(jsDir, 'script.js');
-    fs.writeFileSync(jsFile, code);
-
-    const results = [];
-    for (let i = 0; i < customTestCases.length; i++) {
-        const { input, output } = customTestCases[i];
-        const execution = spawnSync('node', [jsFile], { input });
-        const actualOutput = execution.stdout.toString().trim();
-        results.push(actualOutput === output);
-    }
-
-    return results;
+// Function to compile JavaScript code 
+function compileJavaScript(code) {
+    const tempFile = 'temp.js';
+    fs.writeFileSync(tempFile, code);
+    return {
+        exitCode: 0,
+        message: ['Compiled Successfully'],
+        filePath: tempFile,
+    };
 }
 
-// Function to execute test cases and compare output
-function runTestCase(code, input, expectedOutput, language) {
-    let process;
+// Function to run a test case and return the result
+function runTestCase(filePath, input, expectedOutput, language) {
+    const startRunTime = process.hrtime();
+    let execution;
+    let actualOutput;
+    let errorMessages = [];
+    let exitCode = 0;
+
+    // Execute the code based on the language
     if (language === 'cpp') {
-        process = spawnSync('g++', ['-x', 'c++', '-o', 'temp', '-'], { input: code });
-        if (process.status !== 0) {
-            return false;
-        }
-        const execution = spawnSync('./temp', { input });
-        const actualOutput = execution.stdout.toString().trim();
-        return actualOutput === expectedOutput;
+        execution = spawnSync('./temp.out', { input });
+        actualOutput = execution.stdout.toString().trim();
+        errorMessages = execution.stderr.toString().split('\n');
+        exitCode = execution.status;
     } else if (language === 'python') {
-        const tempPythonFile = code;
-        const process = spawnSync('python', [tempPythonFile], { input: input.join("\n") });
-        const actualOutput = process.stdout.toString().trim();
-        return actualOutput === expectedOutput;
+        execution = spawnSync('python', [filePath], { input });
+        actualOutput = execution.stdout.toString().trim();
+        errorMessages = execution.stderr.toString().split('\n');
+        exitCode = execution.status;
     } else if (language === 'java') {
-        const execution = spawnSync('java', ['-cp', path.dirname(code), 'Main'], { input });
-        const actualOutput = execution.stdout.toString().trim();
-        return actualOutput === expectedOutput;
+        execution = spawnSync('java', ['-cp', path.dirname(filePath), 'Main'], { input });
+        actualOutput = execution.stdout.toString().trim();
+        errorMessages = execution.stderr.toString().split('\n');
+        exitCode = execution.status;
     } else if (language === 'javascript') {
-        const execution = spawnSync('node', [code], { input });
-        const actualOutput = execution.stdout.toString().trim();
-        return actualOutput === expectedOutput;
-    } else {
-        return false;
+        execution = spawnSync('node', [filePath], { input });
+        actualOutput = execution.stdout.toString().trim();
+        errorMessages = execution.stderr.toString().split('\n');
+        exitCode = execution.status;
     }
+
+    const runTime = process.hrtime(startRunTime)[1] / 1000000; // Convert to milliseconds
+
+    return {
+        input,
+        args: "",
+        state: exitCode === 0 ? "Execute" : "Error",
+        out: actualOutput,
+        err: errorMessages.filter(msg => msg), // Remove empty messages
+        exitCode,
+        runTime: Math.round(runTime),
+        memory: process.memoryUsage().heapUsed / 1024 / 1024 // Memory used in MB
+    };
 }
 
-// Starting the server and listening on the specified port
+// Start the server and listen on the specified port
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
+
