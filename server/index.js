@@ -11,14 +11,13 @@ const PORT = 8000;
 app.use(bodyParser.json());
 app.use(cors());
 
-// Endpoint to handle the execution of code
 app.post('/run', async (req, res) => {
     const { language, code, customTestCases } = req.body;
 
     let compileExitCode, compileTime, compileMessage = [];
     const startCompileTime = process.hrtime();
 
-// Compile the code based on the specified language
+    // Compile the code based on the specified language
     let compileResult;
     if (language === 'cpp') {
         compileResult = compileCPP(code);
@@ -59,6 +58,7 @@ app.post('/run', async (req, res) => {
     });
 });
 
+
 // Function to compile C++ code
 function compileCPP(code) {
     const tempFile = 'temp.cpp';
@@ -71,16 +71,20 @@ function compileCPP(code) {
     };
 }
 
-// Function to compile Python code
+//Function to compile Python code
 function compilePython(code) {
     const tempFile = 'temp.py';
     fs.writeFileSync(tempFile, code);
+    
+    const compile = spawnSync('python', ['-m', 'py_compile', tempFile]);
+    
     return {
-        exitCode: 0,
-        message: ['Compiled Successfully'],
+        exitCode: compile.status,
+        message: compile.status === 0 ? ['Compiled Successfully'] : [compile.stderr.toString()],
         filePath: tempFile,
     };
 }
+
 
 // Function to compile Java code
 function compileJava(code) {
@@ -99,20 +103,39 @@ function compileJava(code) {
     };
 }
 
-// Function to compile JavaScript code 
 function compileJavaScript(code) {
     const tempFile = 'temp.js';
-    fs.writeFileSync(tempFile, code);
-    return {
-        exitCode: 0,
-        message: ['Compiled Successfully'],
-        filePath: tempFile,
-    };
+    try {
+        // Write the code to a temporary file
+        fs.writeFileSync(tempFile, code);
+
+        const compile = spawnSync('node', [tempFile]);
+
+        // Log the output for debugging
+        console.log('Compile output:', compile.stdout.toString());
+        console.error('Compile error:', compile.stderr.toString());
+
+        return {
+            exitCode: compile.status,
+            message: compile.status === 0 ? ['Compiled Successfully'] : [compile.stderr.toString()],
+            filePath: tempFile,
+        };
+    } catch (error) {
+        // Handle any errors that occur during file writing or command execution
+        console.error('Error compiling JavaScript:', error);
+        return {
+            exitCode: 1,
+            message: ['Error compiling JavaScript'],
+            filePath: tempFile,
+        };
+    }
 }
 
-// Function to run a test case and return the result
+
 function runTestCase(filePath, input, expectedOutput, language) {
     const startRunTime = process.hrtime();
+    const startMemory = process.memoryUsage().heapUsed;
+    
     let execution;
     let actualOutput;
     let errorMessages = [];
@@ -141,7 +164,9 @@ function runTestCase(filePath, input, expectedOutput, language) {
         exitCode = execution.status;
     }
 
-    const runTime = process.hrtime(startRunTime)[1] / 1000000; // Convert to milliseconds
+    const endRunTime = process.hrtime(startRunTime)[1] / 1000000; // Convert to milliseconds
+    const endMemory = process.memoryUsage().heapUsed;
+    const memoryUsageInMB = (endMemory - startMemory) / 1024 / 1024;
 
     return {
         input,
@@ -150,13 +175,13 @@ function runTestCase(filePath, input, expectedOutput, language) {
         out: actualOutput,
         err: errorMessages.filter(msg => msg), // Remove empty messages
         exitCode,
-        runTime: Math.round(runTime),
-        memory: process.memoryUsage().heapUsed / 1024 / 1024 // Memory used in MB
+        runTime: Math.round(endRunTime),
+        memoryUsageInMB: memoryUsageInMB.toFixed(2) // Consistent memory usage
     };
 }
+
 
 // Start the server and listen on the specified port
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
-
