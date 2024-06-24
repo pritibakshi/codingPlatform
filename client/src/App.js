@@ -1,4 +1,3 @@
-// app.js
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
@@ -14,29 +13,28 @@ function App() {
   const [customTestCases, setCustomTestCases] = useState([]);
   const [error, setError] = useState(null); // To store any errors
 
+  // useEffect to handle the countdown timer
   useEffect(() => {
     if (timerEnabled && remainingTime > 0) {
-      // Start the countdown timer
       const id = setInterval(() => {
         setRemainingTime(prevTime => {
           if (prevTime === 0) {
-            // If time is up, stop the timer
-            clearInterval(id);
+            clearInterval(id); // If time is up, stop the timer
             setTimerEnabled(false);
             return 0;
           }
-          return prevTime - 1;
+          return prevTime - 1; // Decrease the remaining time by 1 second
         });
       }, 1000);
 
-      // Store the timer ID
-      setTimerId(id);
+      setTimerId(id); // Store the timer ID
 
       // Cleanup function to stop the timer when component unmounts or timer is reset
       return () => clearInterval(id);
     }
   }, [timerEnabled, remainingTime]);
 
+  // useEffect to clear the timer when time reaches 0
   useEffect(() => {
     if (remainingTime === 0) {
       clearInterval(timerId);
@@ -44,16 +42,19 @@ function App() {
     }
   }, [remainingTime, timerId]);
 
+  // Format time in mm:ss format
   const formatTime = (time) => {
     const minutes = Math.floor(time / 60);
     const seconds = time % 60;
     return `${minutes}:${seconds < 10 ? `0${seconds}` : seconds}`;
   };
 
+  // Handle adding new custom test case
   const handleAddTestCase = () => {
     setCustomTestCases([...customTestCases, { input: '', output: '' }]);
   };
 
+  // Handle changes in custom test case inputs/outputs
   const handleTestCaseChange = (index, field, value) => {
     const updatedTestCases = customTestCases.map((testCase, i) =>
       i === index ? { ...testCase, [field]: value } : testCase
@@ -61,22 +62,40 @@ function App() {
     setCustomTestCases(updatedTestCases);
   };
 
+  // Function to handle the response from the backend
+  const handleResponse = (response) => {
+    const updatedResults = response.results.map(result => ({
+      ...result,
+      passed: result.state === 'Execute'
+    }));
+
+    setResults(updatedResults);
+    setExecutionTime(response.executionTimeInMs);
+    setMemoryUsed(response.memoryUsageInMB);
+
+    // Check for timeout errors in each result and update UI
+    updatedResults.forEach((result, index) => {
+      if (result.state === 'Error' && result.err.includes('Execution timed out.')) {
+        const newResults = [...results];
+        newResults[index] = { ...result, error: 'Execution timed out.' };
+        setResults(newResults);
+      }
+    });
+  };
+
+  // Run the code and get results
   const runCode = async () => {
-    // Start the timer when code execution begins
-    setTimerEnabled(true);
+    setTimerEnabled(true); // Start the timer when code execution begins
     setError(null); // Reset any previous error
 
     try {
       const response = await axios.post('http://localhost:8000/run', { language, code, customTestCases });
-      setResults(response.data.results);
-      setExecutionTime(response.data.executionTimeInMs);
-      setMemoryUsed(response.data.memoryUsageInMB);
+      handleResponse(response.data);
     } catch (error) {
       console.error('Error:', error);
       setError('An error occurred while running the code. Please try again.');
     } finally {
-      // Reset the timer when code execution completes
-      setTimerEnabled(false);
+      setTimerEnabled(false); // Reset the timer when code execution completes
     }
   };
 
@@ -111,9 +130,10 @@ function App() {
       <div>
         <h2>Test Case Results:</h2>
         <ul>
-          {Array.isArray(results) && results.map((result, index) => (
+          {results.map((result, index) => (
             <li key={index}>
-              Test Case {index + 1}: {result ? 'Passed' : 'Failed'}
+              Test Case {index + 1}: {result.passed ? 'Passed' : 'Failed'}
+              {result.error && <span style={{ color: 'red' }}> - {result.error}</span>}
             </li>
           ))}
         </ul>
@@ -143,9 +163,10 @@ function App() {
         ))}
         <button onClick={handleAddTestCase}>Add Test Case</button>
       </div>
-      {error && <p style={{color: 'red'}}>{error}</p>} {/* Display any error */}
+      {error && <p style={{ color: 'red' }}>{error}</p>} {/* Display any error */}
     </div>
   );
 }
 
 export default App;
+
