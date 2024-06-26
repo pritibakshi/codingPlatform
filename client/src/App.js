@@ -106,6 +106,7 @@ function App() {
         <h2>Select Language:</h2>
         <select value={language} onChange={(e) => setLanguage(e.target.value)}>
           <option value="cpp">C++</option>
+          <option value="C">C</option>
           <option value="python">Python</option>
           <option value="java">Java</option>
           <option value="javascript">JavaScript (Node.js)</option>
@@ -169,4 +170,5 @@ function App() {
 }
 
 export default App;
+
 
