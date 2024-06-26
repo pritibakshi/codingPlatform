@@ -23,7 +23,9 @@ app.post('/run', async (req, res) => {
     let compileResult;
     if (language === 'cpp') {
         compileResult = compileCPP(code);
-    } else if (language === 'python') {
+    } else if (language === 'C') {
+        compileResult = compileC(code);
+    }else if (language === 'python') {
         compileResult = compilePython(code);
     } else if (language === 'java') {
         compileResult = compileJava(code);
@@ -77,6 +79,18 @@ function compileCPP(code) {
     const tempFile = 'temp.cpp';
     fs.writeFileSync(tempFile, code);
     const compile = spawnSync('g++', [tempFile, '-o', 'temp.out']);
+    return {
+        exitCode: compile.status,
+        message: compile.status === 0 ? ['Compiled Successfully'] : [compile.stderr.toString()],
+        filePath: './temp.out',
+    };
+}
+
+// Function to compile C code
+function compileC(code) {
+    const tempFile = 'temp.c';
+    fs.writeFileSync(tempFile, code);
+    const compile = spawnSync('gcc', [tempFile, '-o', 'temp.out']);
     return {
         exitCode: compile.status,
         message: compile.status === 0 ? ['Compiled Successfully'] : [compile.stderr.toString()],
@@ -152,18 +166,19 @@ function runTestCase(filePath, input, expectedOutput, language) {
     let errorMessages = [];
     let exitCode = 0;
 
-    // Process the input correctly for the Python script
-    const formattedInput = input.split(' ').join('\n');
+    // Prepare formatted input for prompts
+    const inputs = input.split('\n').map(line => line.trim());
+
 
     // Execute the code based on the language
-    if (language === 'cpp') {
-        execution = spawnSync('./temp.out', { input: formattedInput, encoding: 'utf-8', timeout: 5000 }); // Adjust timeout as needed
+    if (language === 'cpp' || language === 'C') {
+        execution = spawnSync('./temp.out', { input: inputs.join('\n'), encoding: 'utf-8', timeout: 5000 }); // Adjust timeout as needed
     } else if (language === 'python') {
-        execution = spawnSync('python', [filePath], { input: formattedInput, encoding: 'utf-8', timeout: 5000 }); 
+        execution = spawnSync('python', [filePath], { input: inputs.join('\n'), encoding: 'utf-8', timeout: 5000 }); 
     } else if (language === 'java') {
-        execution = spawnSync('java', ['-cp', path.dirname(filePath), 'Main'], { input: formattedInput, encoding: 'utf-8', timeout: 5000 }); 
+        execution = spawnSync('java', ['-cp', path.dirname(filePath), 'Main'], { input: inputs.join('\n'), encoding: 'utf-8', timeout: 5000 }); 
     } else if (language === 'javascript') {
-        execution = spawnSync('node', [filePath], { input: formattedInput, encoding: 'utf-8', timeout: 5000 }); 
+        execution = spawnSync('node', [filePath], { input: inputs.join('\n'), encoding: 'utf-8', timeout: 5000 }); 
     }
 
     // Check if execution.stdout is null and handle it
@@ -198,10 +213,11 @@ function runTestCase(filePath, input, expectedOutput, language) {
     }
 
     // Compare actual output with expected output
-    const testCasePassed = actualOutput === expectedOutput.trim();
+    const testCasePassed = actualOutput.includes(expectedOutput.trim());
+
 
     // Logging the outputs for debugging
-    console.log('Input:', formattedInput);
+    console.log('Input:', inputs.join('\n'));
     console.log('Expected Output:', expectedOutput.trim());
     console.log('Actual Output:', actualOutput);
     console.log('Test Case Passed:', testCasePassed);
@@ -225,3 +241,4 @@ function runTestCase(filePath, input, expectedOutput, language) {
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
+
