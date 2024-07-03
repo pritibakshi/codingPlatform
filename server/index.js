@@ -86,8 +86,8 @@ function compileCPP(code) {
     };
 }
 
-// Function to compile C code
-function compileC(code) {
+// Function to compile c code
+function compilec(code) {
     const tempFile = 'temp.c';
     fs.writeFileSync(tempFile, code);
     const compile = spawnSync('gcc', [tempFile, '-o', 'temp.out']);
@@ -171,7 +171,7 @@ function runTestCase(filePath, input, expectedOutput, language) {
 
 
     // Execute the code based on the language
-    if (language === 'cpp' || language === 'C') {
+    if (language === 'cpp' || language === 'c') {
         execution = spawnSync('./temp.out', { input: inputs.join('\n'), encoding: 'utf-8', timeout: 5000 }); // Adjust timeout as needed
     } else if (language === 'python') {
         execution = spawnSync('python', [filePath], { input: inputs.join('\n'), encoding: 'utf-8', timeout: 5000 }); 
@@ -181,64 +181,44 @@ function runTestCase(filePath, input, expectedOutput, language) {
         execution = spawnSync('node', [filePath], { input: inputs.join('\n'), encoding: 'utf-8', timeout: 5000 }); 
     }
 
-    // Check if execution.stdout is null and handle it
-    if (execution && execution.stdout) {
-        actualOutput = execution.stdout.toString().trim();
-    } else {
-        actualOutput = '';
-    }
-
-    // Check if execution.stderr is null and handle it
-    if (execution && execution.stderr) {
-        errorMessages = execution.stderr.toString().split('\n');
-    } else {
-        errorMessages = ['No error messages captured.'];
-    }
-
-    // Check if execution.status is null and handle it
-    if (execution && execution.status !== null) {
-        exitCode = execution.status;
-    } else {
-        exitCode = 1; // Assume failure if status is null
-    }
-
-    const endRunTime = process.hrtime(startRunTime)[1] / 1000000; // Convert to milliseconds
-    const endMemory = process.memoryUsage().heapUsed;
-    const memoryUsageInMB = (endMemory - startMemory) / 1024 / 1024;
-
-    // Check if execution timed out
-    if (execution && execution.signal === 'SIGTERM') {
-        errorMessages.push('Execution timed out.');
-        console.log("Exe")
-    }
-
-    // Compare actual output with expected output
-    const testCasePassed = actualOutput.includes(expectedOutput.trim());
-
-
-    // Logging the outputs for debugging
-    console.log('Input:', inputs.join('\n'));
-    console.log('Expected Output:', expectedOutput.trim());
-    console.log('Actual Output:', actualOutput);
-    console.log('Test Case Passed:', testCasePassed);
-
-    return {
-        input,
-        args: "",
-        state: testCasePassed ? "Execute" : "Error",
-        out: actualOutput,
-        err: errorMessages.filter(msg => msg), // Remove empty messages
-        exitCode,
-        runTime: Math.round(endRunTime),
-        memoryUsageInMB: memoryUsageInMB.toFixed(2), // Consistent memory usage
-        testCasePassed 
-    };
+ // Capture actual output, error messages, and exit code
+ if (execution) {
+    actualOutput = execution.stdout ? execution.stdout.toString().trim() : '';
+    errorMessages = execution.stderr ? execution.stderr.toString().split('\n').filter(msg => msg.trim() !== '') : [];
+    exitCode = execution.status !== null ? execution.status : 1; // Assume failure if status is null
 }
 
+// Calculate runtime and memory usage
+const endRunTime = process.hrtime(startRunTime)[1] / 1000000; // Convert to milliseconds
+const endMemory = process.memoryUsage().heapUsed;
+const memoryUsageInMB = (endMemory - startMemory) / 1024 / 1024;
 
+// Determine the state based on exitCode
+const state = exitCode === 0 ? 'Execute' : 'Error';
+
+// Logging the outputs for debugging (optional)
+console.log('Input:', inputs.join('\n'));
+console.log('Expected Output:', expectedOutput.trim());
+console.log('Actual Output:', actualOutput);
+console.log('Error Messages:', errorMessages);
+
+// Return the result object
+return {
+    input,
+    args: '',
+    state,
+    out: actualOutput,
+    err: errorMessages,
+    exitCode,
+    runTime: Math.round(endRunTime),
+    memoryUsageInMB: memoryUsageInMB.toFixed(2),
+    testCasePassed: state === 'Execute',
+};
+}
 
 // Start the server and listen on the specified port
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
+
 
