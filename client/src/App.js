@@ -110,6 +110,7 @@ function App() {
           <option value="python">Python</option>
           <option value="java">Java</option>
           <option value="javascript">JavaScript (Node.js)</option>
+          <option value="ruby">Ruby</option>
         </select>
       </div>
       <div>
