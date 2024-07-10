@@ -23,7 +23,7 @@ app.post('/run', async (req, res) => {
     let compileResult;
     if (language === 'cpp') {
         compileResult = compileCPP(code);
-    } else if (language === 'C') {
+    } else if (language === 'c') {
         compileResult = compileC(code);
     }else if (language === 'python') {
         compileResult = compilePython(code);
@@ -31,6 +31,8 @@ app.post('/run', async (req, res) => {
         compileResult = compileJava(code);
     } else if (language === 'javascript') {
         compileResult = compileJavaScript(code);
+    }else if (language === 'ruby') {
+        compileResult = compileRuby(code);
     } else {
         return res.json({ error: 'Unsupported language' });
     }
@@ -87,7 +89,7 @@ function compileCPP(code) {
 }
 
 // Function to compile c code
-function compilec(code) {
+function compileC(code) {
     const tempFile = 'temp.c';
     fs.writeFileSync(tempFile, code);
     const compile = spawnSync('gcc', [tempFile, '-o', 'temp.out']);
@@ -156,6 +158,31 @@ function compileJavaScript(code) {
 
 
 
+// Function to compile Ruby code
+function compileRuby(code) {
+    const tempFile = path.join(__dirname, 'temp.rb');
+    try {
+        fs.writeFileSync(tempFile, code);
+        const execution = spawnSync('ruby', [tempFile], { input: code, encoding: 'utf-8', timeout: 5000 });
+
+        return {
+            exitCode: execution.status !== null ? execution.status : 1,
+            message: execution.status === 0 ? ['Compiled Successfully'] : [execution.stderr.toString()],
+            filePath: tempFile,
+        };
+    } catch (error) {
+        console.error('Error executing Ruby:', error);
+        return {
+            exitCode: 1,
+            message: ['Error executing Ruby'],
+            filePath: tempFile,
+        };
+    }
+}
+
+
+
+
 // Function to run test cases
 function runTestCase(filePath, input, expectedOutput, language) {
     const startRunTime = process.hrtime();
@@ -179,7 +206,9 @@ function runTestCase(filePath, input, expectedOutput, language) {
         execution = spawnSync('java', ['-cp', path.dirname(filePath), 'Main'], { input: inputs.join('\n'), encoding: 'utf-8', timeout: 5000 }); 
     } else if (language === 'javascript') {
         execution = spawnSync('node', [filePath], { input: inputs.join('\n'), encoding: 'utf-8', timeout: 5000 }); 
-    }
+    }else if (language === 'ruby') {
+        execution = spawnSync('ruby', [filePath], { input: inputs.join('\n'), encoding: 'utf-8', timeout: 5000 }); // Add Ruby execution here
+      }
 
  // Capture actual output, error messages, and exit code
  if (execution) {
@@ -220,5 +249,4 @@ return {
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
-
 
