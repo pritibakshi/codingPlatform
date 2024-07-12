@@ -33,6 +33,8 @@ app.post('/run', async (req, res) => {
         compileResult = compileJavaScript(code);
     }else if (language === 'ruby') {
         compileResult = compileRuby(code);
+    }else if (language === 'csharp') {
+        compileResult = compileCSharp(code);
     } else {
         return res.json({ error: 'Unsupported language' });
     }
@@ -182,6 +184,58 @@ function compileRuby(code) {
 
 
 
+// Function to compile C# code
+function compileCSharp(code) {
+    const tempDir = path.join(__dirname, 'temp_csharp');
+    const tempFile = path.join(tempDir, 'Program.cs');
+    const projectFile = path.join(tempDir, 'temp_csharp.csproj');
+
+    if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    fs.writeFileSync(tempFile, code);
+
+    // Created a minimal C# project file if it doesn't exist
+    if (!fs.existsSync(projectFile)) {
+        fs.writeFileSync(projectFile, `
+            <Project Sdk="Microsoft.NET.Sdk">
+                <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <TargetFramework>netcoreapp3.1</TargetFramework>
+                </PropertyGroup>
+            </Project>
+        `);
+    }
+
+    const compile = spawnSync('dotnet', ['build', tempDir, '-c', 'Release']);
+
+    const compileError = compile.stderr.toString().trim();
+    if (compile.error || compile.status !== 0) {
+        return {
+            exitCode: compile.status !== null ? compile.status : 1,
+            message: [compileError || `Error compiling C#: ${compile.error?.message || 'Unknown error'}`],
+            filePath: null,
+        };
+    }
+
+    const dllPath = path.join(tempDir, 'bin', 'Release', 'netcoreapp3.1', 'temp_csharp.dll');
+    if (!fs.existsSync(dllPath)) {
+        return {
+            exitCode: 1,
+            message: ['Error compiling C#: DLL not found'],
+            filePath: null,
+        };
+    }
+
+    return {
+        exitCode: 0,
+        message: ['Compiled Successfully'],
+        filePath: dllPath,
+    };
+}
+
+
 
 // Function to run test cases
 function runTestCase(filePath, input, expectedOutput, language) {
@@ -208,7 +262,9 @@ function runTestCase(filePath, input, expectedOutput, language) {
         execution = spawnSync('node', [filePath], { input: inputs.join('\n'), encoding: 'utf-8', timeout: 5000 }); 
     }else if (language === 'ruby') {
         execution = spawnSync('ruby', [filePath], { input: inputs.join('\n'), encoding: 'utf-8', timeout: 5000 }); // Add Ruby execution here
-      }
+    }else if (language === 'csharp') {
+        execution = spawnSync('dotnet', [filePath], { input: inputs.join('\n'), encoding: 'utf-8', timeout: 5000 });
+    }
 
  // Capture actual output, error messages, and exit code
  if (execution) {
@@ -217,12 +273,12 @@ function runTestCase(filePath, input, expectedOutput, language) {
     exitCode = execution.status !== null ? execution.status : 1; // Assume failure if status is null
 }
 
-// Calculate runtime and memory usage
+// Calculated runtime and memory usage
 const endRunTime = process.hrtime(startRunTime)[1] / 1000000; // Convert to milliseconds
 const endMemory = process.memoryUsage().heapUsed;
 const memoryUsageInMB = (endMemory - startMemory) / 1024 / 1024;
 
-// Determine the state based on exitCode
+//state based on exitCode
 const state = exitCode === 0 ? 'Execute' : 'Error';
 
 // Logging the outputs for debugging (optional)
@@ -231,7 +287,6 @@ console.log('Expected Output:', expectedOutput.trim());
 console.log('Actual Output:', actualOutput);
 console.log('Error Messages:', errorMessages);
 
-// Return the result object
 return {
     input,
     args: '',
@@ -245,8 +300,13 @@ return {
 };
 }
 
-// Start the server and listen on the specified port
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
+
+
+
+
+
+
 
