@@ -8,9 +8,8 @@ const path = require('path');
 const app = express();
 const PORT = 8000;
 
-// Middleware to parse JSON requests
+//Middleware to parse JSON requests
 app.use(bodyParser.json());
-// Middleware to enable CORS
 app.use(cors());
 
 app.post('/run', async (req, res) => {
@@ -19,7 +18,6 @@ app.post('/run', async (req, res) => {
     let compileExitCode, compileTime, compileMessage = [];
     const startCompileTime = process.hrtime();
 
-    // Compile the code based on the specified language
     let compileResult;
     if (language === 'cpp') {
         compileResult = compileCPP(code);
@@ -35,7 +33,9 @@ app.post('/run', async (req, res) => {
         compileResult = compileRuby(code);
     }else if (language === 'csharp') {
         compileResult = compileCSharp(code);
-    } else {
+    } else if (language === 'go') {
+        compileResult = compileGo(code);
+    }  else {
         return res.json({ error: 'Unsupported language' });
     }
 
@@ -235,6 +235,17 @@ function compileCSharp(code) {
     };
 }
 
+// Function to compile Go code
+function compileGo(code) {
+    const tempFile = 'temp.go';
+    fs.writeFileSync(tempFile, code);
+    const compile = spawnSync('go', ['build', '-o', 'temp.out', tempFile]);
+    return {
+        exitCode: compile.status,
+        message: compile.status === 0 ? ['Compiled Successfully'] : [compile.stderr.toString()],
+        filePath: './temp.out',
+    };
+}
 
 
 // Function to run test cases
@@ -261,16 +272,18 @@ function runTestCase(filePath, input, expectedOutput, language) {
     } else if (language === 'javascript') {
         execution = spawnSync('node', [filePath], { input: inputs.join('\n'), encoding: 'utf-8', timeout: 5000 }); 
     }else if (language === 'ruby') {
-        execution = spawnSync('ruby', [filePath], { input: inputs.join('\n'), encoding: 'utf-8', timeout: 5000 }); // Add Ruby execution here
+        execution = spawnSync('ruby', [filePath], { input: inputs.join('\n'), encoding: 'utf-8', timeout: 5000 }); 
     }else if (language === 'csharp') {
         execution = spawnSync('dotnet', [filePath], { input: inputs.join('\n'), encoding: 'utf-8', timeout: 5000 });
+    }else if (language === 'go') {
+        execution = spawnSync('./temp.out', { input: inputs.join('\n'), encoding: 'utf-8', timeout: 5000 });
     }
 
  // Capture actual output, error messages, and exit code
  if (execution) {
     actualOutput = execution.stdout ? execution.stdout.toString().trim() : '';
     errorMessages = execution.stderr ? execution.stderr.toString().split('\n').filter(msg => msg.trim() !== '') : [];
-    exitCode = execution.status !== null ? execution.status : 1; // Assume failure if status is null
+    exitCode = execution.status !== null ? execution.status : 1; 
 }
 
 // Calculated runtime and memory usage
@@ -281,7 +294,7 @@ const memoryUsageInMB = (endMemory - startMemory) / 1024 / 1024;
 //state based on exitCode
 const state = exitCode === 0 ? 'Execute' : 'Error';
 
-// Logging the outputs for debugging (optional)
+
 console.log('Input:', inputs.join('\n'));
 console.log('Expected Output:', expectedOutput.trim());
 console.log('Actual Output:', actualOutput);
@@ -303,7 +316,6 @@ return {
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
-
 
 
 
