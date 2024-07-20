@@ -112,6 +112,7 @@ function App() {
           <option value="javascript">JavaScript (Node.js)</option>
           <option value="ruby">Ruby</option>
           <option value="csharp">C#</option>
+          <option value="go">Go</option>
         </select>
       </div>
       <div>
